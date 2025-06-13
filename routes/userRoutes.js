@@ -55,7 +55,7 @@ router.post('/register', async (req, res) => {
     );
 
     // Tạo link xác nhận
-    const verificationLink = `http://192.168.12.35:5000/user/verify-email?token=${verificationToken}`;
+    const verificationLink = `https://datn-backend-mvze.onrender.com/user/verify-email?token=${verificationToken}`;
 
     // Gửi email xác nhận
     const mailOptions = {
