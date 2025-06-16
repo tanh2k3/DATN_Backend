@@ -291,14 +291,14 @@ exports.vnpayCallback = async (req, res) => {
         }
 
         // Chuyển hướng về ứng dụng Expo
-        const redirectUrl = `exp://192.168.12.35:8081/--/PaymentResult?status=${status}`;
-        //const redirectUrl = `exp://uffvefa-anonymous-8081.exp.direct/--/PaymentResult?status=${status}`;
+        //const redirectUrl = `exp://192.168.12.35:8081/--/PaymentResult?status=${status}`;
+        const redirectUrl = `exp://uffvefa-anonymous-8081.exp.direct/--/PaymentResult?status=${status}`;
         res.redirect(redirectUrl);
 
     } catch (error) {
         console.error('VNPay callback error:', error);
-        res.redirect('exp://192.168.12.35:8081/--/PaymentResult?status=FAILED');
-        //res.redirect('exp://uffvefa-anonymous-8081.exp.direct/--/PaymentResult?status=FAILED');
+        //res.redirect('exp://192.168.12.35:8081/--/PaymentResult?status=FAILED');
+        res.redirect('exp://uffvefa-anonymous-8081.exp.direct/--/PaymentResult?status=FAILED');
     }
 };
 
