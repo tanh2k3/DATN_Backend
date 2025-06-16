@@ -126,7 +126,8 @@ exports.createVNPayPayment = async (req, res) => {
             vnp_TxnRef: orderId,
             vnp_OrderInfo: orderInfo,
             vnp_OrderType: orderType,
-            vnp_ReturnUrl: `${VNPAY_CONFIG.vnp_ReturnUrl}/payment/vnpay/callback`,
+            //vnp_ReturnUrl: `${VNPAY_CONFIG.vnp_ReturnUrl}/payment/vnpay/callback`,
+            vnp_ReturnUrl: `https://datn-backend-mvze.onrender.com/payment/vnpay/callback`,
             vnp_Locale: locale,
             vnp_CreateDate: createDate
         });
