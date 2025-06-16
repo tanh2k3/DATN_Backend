@@ -548,12 +548,12 @@ exports.vnpayCallbackWeb = async (req, res) => {
 
         // Chuyển hướng về web
         //const redirectUrl = `http://localhost:5173/payment-result?status=${status}`;
-        const redirectUrl = `https://tuanbo.id.vn/payment-result?status=${status}`;
+        const redirectUrl = `https://datn-frontend.web.app/payment-result?status=${status}`;
         res.redirect(redirectUrl);
 
     } catch (error) {
         console.error('VNPay callback error:', error);
         //res.redirect('http://localhost:5173/payment-result?status=FAILED');
-        res.redirect('https://tuanbo.id.vn/payment-result?status=FAILED');
+        res.redirect('https://datn-frontend.web.app/payment-result?status=FAILED');
     }
 };
