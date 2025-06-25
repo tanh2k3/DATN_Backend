@@ -4,6 +4,8 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const jwt = require('jsonwebtoken');
+const { Client } = require('@elastic/elasticsearch');
 
 // Cấu hình multer
 const storage = multer.diskStorage({
@@ -18,6 +20,34 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+// Middleware kiểm tra access token
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Không có access token' });
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(401).json({ error: 'Access token không hợp lệ hoặc đã hết hạn' });
+    req.user = user;
+    next();
+  });
+}
+
+// Middleware kiểm tra quyền admin
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Bạn không có quyền thực hiện thao tác này!' });
+  }
+  next();
+}
+
+const esClient = new Client({
+  node: process.env.ELASTICSEARCH_URL,
+  auth: {
+    username: process.env.ELASTICSEARCH_USERNAME,
+    password: process.env.ELASTICSEARCH_PASSWORD
+  }
+});
+
 // Lấy tất cả phim
 router.get('/all', async (req, res) => {
   try {
@@ -26,6 +56,39 @@ router.get('/all', async (req, res) => {
   } catch (err) {
     console.error('Lỗi khi lấy danh sách phim:', err);
     res.status(500).json({ error: 'Lỗi server' });
+  }
+});
+
+// Tìm kiếm phim bằng Elasticsearch
+router.get('/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q) {
+    // Nếu không có query, trả về tất cả phim như cũ
+    try {
+      const [rows] = await db.query('SELECT * FROM movies');
+      return res.json(rows);
+    } catch (err) {
+      console.error('Lỗi khi lấy danh sách phim:', err);
+      return res.status(500).json({ error: 'Lỗi server' });
+    }
+  }
+  try {
+    const response = await esClient.search({
+      index: 'movies',
+      body: {
+        query: {
+          multi_match: {
+            query: q,
+            fields: ['title^3', 'description', 'genre', 'director', 'actors']
+          }
+        }
+      }
+    });
+    const hits = response.hits.hits.map(hit => hit._source);
+    res.json(hits);
+  } catch (err) {
+    console.error('Lỗi khi tìm kiếm phim với Elasticsearch:', err);
+    res.status(500).json({ error: 'Lỗi server hoặc Elasticsearch chưa sẵn sàng' });
   }
 });
 
@@ -44,7 +107,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Thêm phim mới
-router.post('/add', upload.fields([
+router.post('/add', authenticateToken, requireAdmin, upload.fields([
   { name: 'img', maxCount: 1 },
   { name: 'poster', maxCount: 1 }
 ]), async (req, res) => {
@@ -99,6 +162,15 @@ router.post('/add', upload.fields([
     ];
 
     const [result] = await db.query(query, values);
+    // Lấy phim vừa thêm để index lên Elasticsearch
+    const [movies] = await db.query('SELECT * FROM movies WHERE id = ?', [result.insertId]);
+    if (movies.length > 0) {
+      await esClient.index({
+        index: 'movies',
+        id: movies[0].id,
+        body: movies[0]
+      });
+    }
     res.status(200).json({ message: 'Thêm phim thành công', movieId: result.insertId });
   } catch (err) {
     console.error('Lỗi khi thêm phim:', err);
@@ -128,7 +200,7 @@ router.post('/:id/heart-check', async (req, res) => {
 });
 
 //Tăng/giảm số lượng trái tim
-router.post('/:id/heart', async (req, res) => {
+router.post('/:id/heart', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { increment, id_user } = req.body;
 
@@ -159,9 +231,8 @@ router.post('/:id/heart', async (req, res) => {
   }
 });
 
-
 // Xóa phim
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     // Lấy thông tin phim để xóa ảnh
     const [movie] = await db.query('SELECT img, poster FROM movies WHERE id = ?', [req.params.id]);
@@ -172,6 +243,22 @@ router.delete('/:id', async (req, res) => {
 
     // Xóa phim khỏi database
     await db.query('DELETE FROM movies WHERE id = ?', [req.params.id]);
+
+    // Xóa phim khỏi Elasticsearch
+    try {
+      await esClient.delete({
+        index: 'movies',
+        id: req.params.id
+      });
+      console.log('Đã xóa phim khỏi Elasticsearch:', req.params.id);
+    } catch (esErr) {
+      // Nếu không tìm thấy document, vẫn cho qua
+      if (esErr.meta && esErr.meta.statusCode === 404) {
+        console.log('Phim không tồn tại trên Elasticsearch:', req.params.id);
+      } else {
+        console.error('Lỗi khi xóa phim khỏi Elasticsearch:', esErr);
+      }
+    }
 
     // Xóa file ảnh nếu tồn tại
     if (movie[0].img) {

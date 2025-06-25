@@ -128,6 +128,7 @@ exports.createVNPayPayment = async (req, res) => {
             vnp_OrderType: orderType,
             //vnp_ReturnUrl: `${VNPAY_CONFIG.vnp_ReturnUrl}/payment/vnpay/callback`,
             vnp_ReturnUrl: `https://datn-backend-mvze.onrender.com/payment/vnpay/callback`,
+            //vnp_ReturnUrl: `http://192.168.1.36/payment/vnpay/callback`,
             vnp_Locale: locale,
             vnp_CreateDate: createDate
         });
@@ -385,6 +386,7 @@ exports.createVNPayPaymentWeb = async (req, res) => {
             vnp_OrderType: orderType,
             //vnp_ReturnUrl: `${VNPAY_CONFIG.vnp_ReturnUrl}/payment/vnpay/callback-web`,
             vnp_ReturnUrl: `https://datn-backend-mvze.onrender.com/payment/vnpay/callback-web`,
+            //vnp_ReturnUrl: `http://192.168.1.36:5000:/payment/vnpay/callback-web`,
             vnp_Locale: locale,
             vnp_CreateDate: createDate
         });

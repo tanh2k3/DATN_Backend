@@ -23,6 +23,18 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+// Middleware kiểm tra access token
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Không có access token' });
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(401).json({ error: 'Access token không hợp lệ hoặc đã hết hạn' });
+    req.user = user;
+    next();
+  });
+}
+
 // Route đăng ký
 router.post('/register', async (req, res) => {
   try {
@@ -139,14 +151,21 @@ router.post('/login', async (req, res) => {
         return res.status(401).json({ error: 'Email hoặc mật khẩu không đúng!' });
       }
 
-      const token = jwt.sign(
-        { id: user.id },
+      // Tạo access token và refresh token
+      const accessToken = jwt.sign(
+        { id: user.id, role: user.role },
         process.env.JWT_SECRET,
         { expiresIn: '1h' }
       );
+      const refreshToken = jwt.sign(
+        { id: user.id, role: user.role },
+        process.env.JWT_REFRESH_SECRET,
+        { expiresIn: '30d' }
+      );
 
       res.json({
-        token,
+        accessToken,
+        refreshToken,
         user: {
           id: user.id,
           email: user.email,
@@ -163,12 +182,12 @@ router.post('/login', async (req, res) => {
     }
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Lỗi server khi đăng nhập' });
+    res.status(500).json({ error: 'Lỗi server khi đăng nhập' }); 
   }
 });
 
 // Upload avatar
-router.post('/upload-avatar', upload.single('avatar'), async (req, res) => {
+router.post('/upload-avatar', authenticateToken, upload.single('avatar'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Không có file được tải lên!' });
@@ -198,7 +217,7 @@ router.post('/upload-avatar', upload.single('avatar'), async (req, res) => {
 });
 
 // Route đổi mật khẩu
-router.post('/change-password', async (req, res) => {
+router.post('/change-password', authenticateToken, async (req, res) => {
   try {
     const { userId, currentPassword, newPassword } = req.body;
 
@@ -244,7 +263,7 @@ router.post('/change-password', async (req, res) => {
 });
 
 // Route xác thực mật khẩu
-router.post('/verify-password', async (req, res) => {
+router.post('/verify-password', authenticateToken, async (req, res) => {
   try {
     const { userId, password } = req.body;
 
@@ -355,7 +374,7 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // Lấy thông tin user theo id
-router.get('/info/:id', async (req, res) => {
+router.get('/info/:id', authenticateToken, async (req, res) => {
   try {
     const userId = req.params.id;
     const [results] = await db.query(
@@ -383,7 +402,7 @@ router.get('/info/:id', async (req, res) => {
 });
 
 // Lấy tổng chi tiêu của user
-router.get('/total-spent/:id', async (req, res) => {
+router.get('/total-spent/:id', authenticateToken, async (req, res) => {
   try {
     const userId = req.params.id;
     const [results] = await db.query(
@@ -435,6 +454,26 @@ router.get('/tickets/:id', async (req, res) => {
   } catch (error) {
     console.error('Error getting user tickets:', error);
     res.status(500).json({ error: 'Lỗi server khi lấy lịch sử vé' });
+  }
+});
+
+// Thêm route refresh-token
+router.post('/refresh-token', async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(401).json({ error: 'Thiếu refresh token' });
+
+  try {
+    jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
+      if (err) return res.status(403).json({ error: 'Refresh token hết hạn hoặc không hợp lệ' });
+      const accessToken = jwt.sign(
+        { id: decoded.id, role: decoded.role },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+      res.json({ accessToken });
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Lỗi server khi refresh token' });
   }
 });
 

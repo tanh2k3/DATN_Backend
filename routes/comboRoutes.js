@@ -3,6 +3,7 @@ const db = require('../db');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const jwt = require('jsonwebtoken');
 
 // Cấu hình multer
 const storage = multer.diskStorage({
@@ -17,6 +18,26 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+// Middleware kiểm tra access token
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Không có access token' });
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(401).json({ error: 'Access token không hợp lệ hoặc đã hết hạn' });
+    req.user = user;
+    next();
+  });
+}
+
+// Middleware kiểm tra quyền admin
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Bạn không có quyền thực hiện thao tác này!' });
+  }
+  next();
+}
+
 // Lấy tất cả combo
 router.get('/all', async (req, res) => {
   try {
@@ -29,7 +50,7 @@ router.get('/all', async (req, res) => {
 });
 
 // Thêm combo mới
-router.post('/', upload.single('img'), async (req, res) => {
+router.post('/', authenticateToken, requireAdmin, upload.single('img'), async (req, res) => {
   try {
     const { name, cost, description } = req.body;
     const img = req.file ? req.file.filename : null;
@@ -59,7 +80,7 @@ router.post('/', upload.single('img'), async (req, res) => {
 });
 
 // Cập nhật thông tin combo
-router.put('/:id', upload.single('img'), async (req, res) => {
+router.put('/:id', authenticateToken, requireAdmin, upload.single('img'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, cost, description } = req.body;
@@ -107,7 +128,7 @@ router.put('/:id', upload.single('img'), async (req, res) => {
 });
 
 // Xóa combo
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 

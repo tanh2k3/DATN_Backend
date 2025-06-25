@@ -18,6 +18,27 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+// Middleware kiểm tra access token
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Không có access token' });
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(401).json({ error: 'Access token không hợp lệ hoặc đã hết hạn' });
+    req.user = user;
+    next();
+  });
+}
+
+// Middleware kiểm tra quyền admin
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Bạn không có quyền thực hiện thao tác này!' });
+  }
+  next();
+}
+
+
 // Lấy tất cả suất chiếu
 router.get('/all', async (req, res) => {
   try {
@@ -99,7 +120,7 @@ router.get('/:id/booked-seats', async (req, res) => {
 });
 
 // Xóa lịch chiếu theo ID
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const [result] = await db.query('DELETE FROM showtimes WHERE id = ?', [req.params.id]);
     
