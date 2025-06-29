@@ -79,7 +79,8 @@ router.get('/search', async (req, res) => {
         query: {
           multi_match: {
             query: q,
-            fields: ['title^3', 'description', 'genre', 'director', 'actors']
+            fields: ['title^3', 'description', 'genre', 'director', 'actors'],
+            fuzziness: 'AUTO'
           }
         }
       }
